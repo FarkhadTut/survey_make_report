@@ -18,7 +18,6 @@ DROP_COLS = ['deviceid',
              'cur_time',
              'cur_date',
              'cur_datetime',
-             'region',
              'cur_time', 
              'cur_date', 
              'cur_datetime', 
@@ -34,11 +33,8 @@ DROP_COLS = ['deviceid',
              '_notes',
              '_submitted_by',
              '_tags', 
-
-            
             '1.2. Интервьюерни танланг:',
             'respondents',
-
              ]
 
 
@@ -46,7 +42,7 @@ DROP_COLS = ['deviceid',
 
 new_sheet = 'Свод'
 
-
+SPACE_BETWEEN = 5
 
 
 
@@ -67,13 +63,15 @@ def move_other_to_end(lst):
     return lst
 
 def create_new_sheet(filename, new_sheet):
+    start_col = '5. Корхонанинг асосий иқтисодий фаолият тури:'
+    end_col = '63. Тадбиркорлик муҳити ва бизнес шароитларини яхшилаш учун таклифларингиз:'
+    DROP_COLS.append(start_col)
     wb = openpyxl.load_workbook(filename)
     df = pd.read_excel(filename)
-    regions = df['region'].unique().tolist()
+    regions = df[start_col].unique().tolist()
     wb.create_sheet(new_sheet)
     ws = wb[new_sheet]
-    start_col = 'region'
-    end_col = '63. Тадбиркорлик муҳити ва бизнес шароитларини яхшилаш учун таклифларингиз:'
+    
     ws_db = wb.active
     ws_db.title = SHEET_NAME_DB
     max_rows = ws_db.max_row
@@ -102,7 +100,7 @@ def create_new_sheet(filename, new_sheet):
     passed_start_col = False
     for col_i in range(1, max_columns+1):
         column = ws_db[f'{get_column_letter(col_i)}1'].value
-        if column.strip() == 'region':
+        if column.strip() == start_col:
             passed_start_col = True
         if not passed_start_col:
             continue
@@ -120,7 +118,7 @@ def create_new_sheet(filename, new_sheet):
                                                                        horizontal='center',
                                                                        vertical='center')
             
-            if not(df[column].dtype in ['int64', 'float64'] or answers_count > 20):
+            if not(df[column].dtype in ['int64', 'float64'] or answers_count > 25):
                 #Single choice question
                 start_col = cur_col
                 
@@ -161,7 +159,7 @@ def create_new_sheet(filename, new_sheet):
                 
                 
         ##############################################################################
-        elif column == 'region':
+        elif column == start_col:
             cur_col += 1
             ws[f'{get_column_letter(cur_col)}1'] = column
             ws[f'{get_column_letter(cur_col)}1'].alignment = Alignment(vertical='center',
@@ -175,15 +173,15 @@ def create_new_sheet(filename, new_sheet):
 
     for i, region in enumerate(regions):
         ws[f'A{i+3}'] = region
-        ws[f'A{i+22}'] = region
+        ws[f'A{i+3+len(regions) + SPACE_BETWEEN}'] = region
 
     ws.row_dimensions[1].height = 172.5
     ws.row_dimensions[2].height = 112.5
     ws.column_dimensions['A'].width = 30
-    return wb, columns, regions_col_db
+    return wb, columns, regions_col_db, regions
 
 
-def calculate(wb, columns, regions_col_db):
+def calculate(wb, columns, regions_col_db, regions):
 
     AVERAGE =[
         '7. Бугунги кунда корхона қандай қувватда ишламоқда? (мавжуд қувватлардан фойдаланиш даражаси)',
@@ -194,7 +192,9 @@ def calculate(wb, columns, regions_col_db):
     ws_db = wb.active
     sheet_name_db = ws_db.title 
     ws = wb[new_sheet]
-    for row in range(3, 17):
+    start_row_idx = 3
+    end_row_idx = start_row_idx + len(regions)
+    for row in range(start_row_idx, end_row_idx):
         for column in columns:
             question = column['question']
             region = f'$A{row}'
@@ -220,14 +220,14 @@ def calculate(wb, columns, regions_col_db):
     for column in columns:
         if column['type'] == 'numeric' or column['type'] == 'multiple' or column['type'] == 'regions':
             col_svod = get_column_letter(column['col'])
-            ws[f'{col_svod}17'] = f'=SUM({col_svod}3:{col_svod}16)'
-            ws[f'{col_svod}17'].font = Font(bold=True)
+            ws[f'{col_svod}{end_row_idx}'] = f'=SUM({col_svod}{start_row_idx}:{col_svod}{end_row_idx-1})'
+            ws[f'{col_svod}{end_row_idx}'].font = Font(bold=True)
 
         else:
             for col_svod_single in range(column['col'], column['end_col']+1):
                 col_svod_single = get_column_letter(col_svod_single)
-                ws[f'{col_svod_single}17'] = f'=SUM({col_svod_single}3:{col_svod_single}16)'
-                ws[f'{col_svod_single}17'].font = Font(bold=True)
+                ws[f'{col_svod_single}{end_row_idx}'] = f'=SUM({col_svod_single}{start_row_idx}:{col_svod_single}{end_row_idx-1})'
+                ws[f'{col_svod_single}{end_row_idx}'].font = Font(bold=True)
 
 
         ### works but no need actually, calculates average of averages but in the right way
@@ -240,21 +240,25 @@ def calculate(wb, columns, regions_col_db):
 
     #####################
 
+    
+    one_to_one_step = SPACE_BETWEEN + len(regions)
+    start_row_idx = end_row_idx + SPACE_BETWEEN
+    end_row_idx = start_row_idx + len(regions)
 
     ##### percentage count #######
-    for row in range(22, 37):
+    for row in range(start_row_idx, end_row_idx+1):
         for column in columns:
             if column['type'] == 'numeric' or column['type'] == 'multiple' or column['type'] == 'regions':
                 col_svod = get_column_letter(column['col'])
-                ws[f'{col_svod}{row}'] = f'={col_svod}{row-19}/$B{row-19}'
-                ws[f'{col_svod}36'].font = Font(bold=True)
+                ws[f'{col_svod}{row}'] = f'={col_svod}{row-one_to_one_step}/$B{row-one_to_one_step}'
+                ws[f'{col_svod}{end_row_idx}'].font = Font(bold=True)
                 ws[f'{col_svod}{row}'].number_format = '0.0%'
 
             else:
                 for col_svod_single in range(column['col'], column['end_col']+1):
                     col_svod_single = get_column_letter(col_svod_single)
-                    ws[f'{col_svod_single}{row}'] = f'={col_svod_single}{row-19}/$B{row-19}'
-                    ws[f'{col_svod_single}36'].font = Font(bold=True)
+                    ws[f'{col_svod_single}{row}'] = f'={col_svod_single}{row-one_to_one_step}/$B{row-one_to_one_step}'
+                    ws[f'{col_svod_single}{end_row_idx}'].font = Font(bold=True)
                     ws[f'{col_svod_single}{row}'].number_format = '0.0%'
     ####################################
 
@@ -273,11 +277,15 @@ def calculate(wb, columns, regions_col_db):
 def make_report(db_filename):
     db_filename = os.path.join('data', db_filename)
     filename_out = db_filename#f"out\\freq\\output_{os.path.basename(db_filename)}"
-    wb, columns, regions_col_db = create_new_sheet(db_filename, new_sheet=new_sheet)
-    wb = calculate(wb, columns, regions_col_db)
+    wb, columns, regions_col_db, regions = create_new_sheet(db_filename, new_sheet=new_sheet)
+    wb = calculate(wb, columns, regions_col_db, regions)
     save(wb, filename_out=filename_out)
     print("Massive Frequency table ready!....")
 
 
 
 
+
+
+
+make_report('db_2024_07_29.xlsx')
